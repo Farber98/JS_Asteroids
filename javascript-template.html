@@ -8,20 +8,25 @@
 <body>
     <canvas id="gameCanvas" width="700" height="500"></canvas>
     <script>
-        
+
+/***************************** CONSTANTES DE CONFIGURACION  ***************************************/
+
+        const ASTEROIDS_VERT = 10;  //Numero promedio de vertices en cada asteroide.
+        const ASTEROIDS_SIZE = 100; // Tamaño inicial de mis asteroides.
+        const ASTEROIDS_SPEED = 50; //Maxima velocidad inicial de un asteroide en pixeles por segundo.
+        const ASTEROIDS_NUM = 3;
+        const ASTEROIDS_JAG = 0.4;  // Irregularidad de un asteroide.  ( 0 = none, 1 = lots.)
         const FPS = 30; //Frames por segundo.
         const SHIP_SIZE = 30;  // Ship height in pixels.
         const SHIP_AVANCE = 5;  //Aceleracion de la nave en px por segundo.
         const TURN_SPEED = 360; // Velocidad de giro en grados por segundo.
         const FRICCION = 0.7;   //Coeficiente de friccion del espacio (0 = no hay friccion, 1 = mucha friccion).
 
+/***************************** CONSTANTES DE CONFIGURACION  ***************************************/
+
         /** @type {HTMLCanvasElement} */
         var canv = document.getElementById("gameCanvas"); //Referencia al objeto con ID "GameCanvas"
         var contx = canv.getContext("2d"); //Objeto usado para dibujar en el canvas.
-
-        /* Manejadores de eventos. */
-        document.addEventListener("keydown",keyDown);
-        document.addEventListener("keyup",keyUp);
 
         /* Defino la nave como un objeto JSON. */
         var ship = {
@@ -37,9 +42,34 @@
             }
         }
 
+        /* Defino los asteroides */
+        var asteroids = [];
+        createAsteroidsBelt();
+
+        /* Manejadores de eventos. */
+        document.addEventListener("keydown",keyDown);
+        document.addEventListener("keyup",keyUp);
+
         /* Seteamos el loop. */
         setInterval(update, 1000 / FPS); //Actualizo cada un tercio de segundo.
 
+
+        function createAsteroidsBelt(){
+            var x,y;
+            for (var i = 0; i < ASTEROIDS_NUM; i++){
+                do{
+                    x = Math.floor(Math.random() * canv.width); //Posicion aleatoria de un asteroide en x
+                    y = Math.floor(Math.random() * canv.height); //Posicion aleatoria de un asteroide en x
+                //Pasamos las coordenadas de la nave para que no caigan asteroides encima al inicio.
+                }while(distBetweenPoints(ship.x, ship.y ,x , y) < ASTEROIDS_SIZE * 2 + ship.ratio )
+                asteroids.push(newAsteroid(x,y));
+            }
+        }
+
+        function distBetweenPoints(x1, y1 , x2 , y2)
+        {   //
+            return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        }
         function keyDown(/** @type {KeyboardEvent} */ evt){
             switch(evt.keyCode){
 
@@ -73,6 +103,26 @@
                     ship.rota = 0;
                     break;
             }
+        }
+
+        function newAsteroid(x,y){
+            var asteroid = {    //Lo que necesitamos saber de cada asteroide.
+                x: x,   //Posicion en ex
+                y: y,   //Posicion en y
+                //Velocidad en x e y aleatoria                          //Aleatoriamente se mueve hacia delante o atras.
+                xVelocity: Math.random() * ASTEROIDS_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1),
+                yVelocity: Math.random() * ASTEROIDS_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1),
+                ratio: ASTEROIDS_SIZE / 2,   //Radio de cada asteroide.
+                angle: Math.random() * Math.PI * 2, //Angulo aleatorio en radianes.
+                //Numero aleatorio entre 5 y 15.
+                vertixes: Math.floor(Math.random() * (ASTEROIDS_VERT + 1) + ASTEROIDS_VERT / 2),
+                offset: [] 
+            }
+            /* Creamos el array del offset de los vertices. */
+            for(var i=0; i < asteroid.vertixes; i++){   //Numero aleatorio entre 0 y 2.
+                asteroid.offset.push(Math.random() * ASTEROIDS_JAG * 2 + 1 - ASTEROIDS_JAG);
+            }
+            return asteroid;
         }
 
         function update(){
@@ -143,6 +193,57 @@
             contx.closePath();    //Cerramos el triangulo.
             contx.stroke(); //Dibuja el camino elegido.
 
+            /* Dibujamos los asteroides */
+            contx.strokeStyle = "grey";
+            contx.lineWidth = SHIP_SIZE / 20;
+            var x,y,ratio,angle,vertixes, offset;
+            for(var i = 0; i < asteroids.length ; i++){
+
+                /* Tomamos las propiedades del asteroide */
+                x = asteroids[i].x;
+                y = asteroids[i].y;
+                ratio = asteroids[i].ratio;
+                angle = asteroids[i].angle;
+                vertixes = asteroids[i].vertixes;
+                offset = asteroids[i].offset;
+
+                /* Dibujamos camino del asteroide */
+                contx.beginPath();
+                contx.moveTo(
+                    x + ratio * offset[0] * Math.cos(angle),//Punto inicial, centro del asteroide.
+                    y + ratio * offset[0] * Math.sin(angle)
+                );
+
+                /* Dibujamos el poligono del asteroide */
+                for (var j = 1; j < vertixes; j++){
+                    contx.lineTo( //Modificamos el angulo segun el  n° vertice.
+                        x + ratio * offset[j] * Math.cos(angle + j * Math.PI * 2 / vertixes),
+                        y + ratio * offset[j] * Math.sin(angle + j * Math.PI * 2 / vertixes)
+                    );
+                }
+                contx.closePath();
+                contx.stroke();   
+                
+
+                /* Movemos el asteroide */
+                asteroids[i].x += asteroids[i].xVelocity;
+                asteroids[i].y += asteroids[i].yVelocity;
+
+                /* Manejamos margenes de pantalla del asteroide */
+                if(asteroids[i].x < 0 -asteroids[i].ratio){
+                    asteroids[i].x = canv.width + asteroids[i].ratio;
+                }else if(asteroids[i].x > canv.width + asteroids[i].ratio){
+                    asteroids[i].x = 0 - asteroids[i].ratio
+                }
+            
+                if(asteroids[i].y < 0 - asteroids[i].ratio){
+                    asteroids[i].y = canv.height + asteroids[i].ratio;
+                }else if(asteroids[i].y > canv.height + asteroids[i].ratio){
+                    asteroids[i].y = 0 - asteroids[i].ratio
+                }
+
+            }
+            
             /* Rotamos la nave */
             ship.angle += ship.rota;
 

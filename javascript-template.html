@@ -10,17 +10,21 @@
     <script>
 
 /***************************** CONSTANTES DE CONFIGURACION  ***************************************/
-
+        const SHIP_INVULNERABILITY_DURATION = 3;   //Invulnerabilidad al hacer un respawn en segundos.
+        const SHIP_BLINK_DURATION = 0.1;    //Duracion del destello al respwan en segundos.
+        const SHIP_EXPLO_DURATION = 0.3 ;   //Duracion de la explosion en segundos.
         const ASTEROIDS_VERT = 10;  //Numero promedio de vertices en cada asteroide.
         const ASTEROIDS_SIZE = 100; // Tamaño inicial de mis asteroides.
         const ASTEROIDS_SPEED = 50; //Maxima velocidad inicial de un asteroide en pixeles por segundo.
-        const ASTEROIDS_NUM = 3;
+        const ASTEROIDS_NUM = 30;
         const ASTEROIDS_JAG = 0.4;  // Irregularidad de un asteroide.  ( 0 = none, 1 = lots.)
         const FPS = 30; //Frames por segundo.
         const SHIP_SIZE = 30;  // Ship height in pixels.
         const SHIP_AVANCE = 5;  //Aceleracion de la nave en px por segundo.
         const TURN_SPEED = 360; // Velocidad de giro en grados por segundo.
         const FRICCION = 0.7;   //Coeficiente de friccion del espacio (0 = no hay friccion, 1 = mucha friccion).
+        const MOSTRAR_PUNTO = false;    //Mostramos o escondemos el punto del centro
+        const MOSTRAR_COLISION = false; //Mostramos o escondemos una colision
 
 /***************************** CONSTANTES DE CONFIGURACION  ***************************************/
 
@@ -39,8 +43,12 @@
             avance: {   //Nos permite que se continue avanzando en dicha direccion cuando soltemos la letra.
                 x:0,
                 y:0
-            }
+            },
+            explodeTime: 0  //Cuando explode time es 0, esta explotando.
         }
+
+        /* Para crear una nueva nave cuando explota. */
+        var ship = newShip();
 
         /* Defino los asteroides */
         var asteroids = [];
@@ -70,6 +78,19 @@
         {   //
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         }
+
+        //Si se colisiona, se pinta todo.
+        function explodeShip(){
+            ship.explodeTime = Math.ceil(SHIP_EXPLO_DURATION * FPS);
+            
+            contx.fillStyle = "lime";   //Se colorea por dentro.
+            contx.strokeStyle = "lime";
+            contx.beginPath();
+            contx.arc(ship.x,ship.y,ship.ratio,0, Math.PI * 2, false);  //Usa una curva dada para crear un circulo.
+            contx.fill()    //Se deja de colorear
+            contx.stroke();
+        }
+
         function keyDown(/** @type {KeyboardEvent} */ evt){
             switch(evt.keyCode){
 
@@ -125,79 +146,159 @@
             return asteroid;
         }
 
-        function update(){
-            /* Dibujamos el espacio */
+        function newShip()  //Volvemos a setear las propiedades para crear otra nave.
+        {
+            return ship = 
+            {
+                x: canv.width /2,
+                y: canv.height /2,
+                ratio: SHIP_SIZE / 2,
+                angle: (90 / 180 * Math.PI), //Como las funciones matematicas funcionan en radianes tenemos que dividir en 180 y multiplicar por PI
+                rota: 0,
+                blinkNumber: Math.ceil(SHIP_INVULNERABILITY_DURATION / SHIP_BLINK_DURATION),    //Cantidad de destellos
+                blinkTime: Math.ceil(SHIP_BLINK_DURATION * FPS),  //Duracion de los destellos.
+                avanzando: false,
+                avance: {   //Nos permite que se continue avanzando en dicha direccion cuando soltemos la letra.
+                    x:0,
+                    y:0
+                },
+                explodeTime: 0  //Cuando explode time es 0, esta explotando.
+            }
+        }
 
+        function update()
+        {
+            var blinking = ship.blinkNumber % 2 == 0; //Cuando es para destella, cuando es impar no. De tal manera reduciendo de a 1 se da ese efecto.
+
+            var exploding = ship.explodeTime > 0; //Significa que esta explotando
+
+            /* Dibujamos el espacio */
             contx.fillStyle = "black"; //Seteo color usado para llenar el dibujo
             contx.fillRect(0,0,canv.width,canv.height); // Dimensones del rectangulo.
 
             /* Avanzamos la nave */
-            if(ship.avanzando){ //Mientras mantengamos la tecla de avanzar, la nave se acelera cada vez mas.
+            if(ship.avanzando)  //Mientras mantengamos la tecla de avanzar, la nave se acelera cada vez mas.
+            { 
                 ship.avance.x += SHIP_AVANCE * Math.cos(ship.angle) / FPS;  //Componente avance en x.
                 ship.avance.y -= SHIP_AVANCE * Math.sin(ship.angle) / FPS;   //Componente avance en y.
 
                 /* Dibujamos efectos mientras estamos acelerando */
-                contx.fillStyle = "red";    //Dentro del fueguito
-                contx.strokeStyle = "yellow";    //Color borde del fueguito.
-                contx.lineWidth = SHIP_SIZE / 10;   //Ancho de la linea del fueguito.
-                contx.beginPath();  //Resetea o comienza la linea que quiero trazar.
+                if(!exploding && blinking)
+                {
+                    contx.fillStyle = "red";    //Dentro del fueguito
+                    contx.strokeStyle = "yellow";    //Color borde del fueguito.
+                    contx.lineWidth = SHIP_SIZE / 10;   //Ancho de la linea del fueguito.
+                    contx.beginPath();  //Resetea o comienza la linea que quiero trazar.
                 
-                /* Parte trasera izquierda. */
-                contx.moveTo(  
-                    ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) + 0.5 * Math.sin(ship.angle)),  //Lo hacemos mas finito al fueguito
-                    ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) - 0.5 * Math.cos(ship.angle))
-                );
-                
-                /*  Parte trasera central detras de la nave. */
-                contx.lineTo(  
-                    ship.x - ship.ratio * 4 / 3 * Math.cos(ship.angle),
-                    ship.y + ship.ratio * 4 / 3 * Math.sin(ship.angle)
-                );
 
-                /* Parte trasera derecha de la nave. */
-                contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
-                    ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) - 0.5 * Math.sin(ship.angle)),  //Lo hacemos mas finito al fueguito
-                    ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) + 0.5 * Math.cos(ship.angle))
-                );
-                contx.closePath();    //Cerramos el patron.
-                contx.fill();
-                contx.stroke(); //Dibuja el camino elegido.
+                    /* Parte trasera izquierda. */
+                    contx.moveTo(  
+                        ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) + 0.5 * Math.sin(ship.angle)),  //Lo hacemos mas finito al fueguito
+                        ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) - 0.5 * Math.cos(ship.angle))
+                    );
+                    
+                    /*  Parte trasera central detras de la nave. */
+                    contx.lineTo(  
+                        ship.x - ship.ratio * 4 / 3 * Math.cos(ship.angle),
+                        ship.y + ship.ratio * 4 / 3 * Math.sin(ship.angle)
+                    );
 
+                    /* Parte trasera derecha de la nave. */
+                    contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
+                        ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) - 0.5 * Math.sin(ship.angle)),  //Lo hacemos mas finito al fueguito
+                        ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) + 0.5 * Math.cos(ship.angle))
+                    );
+                    contx.closePath();    //Cerramos el patron.
+                    contx.fill();
+                    contx.stroke(); //Dibuja el camino elegido.
+                }
             }else{
                 ship.avance.x -= FRICCION * ship.avance.x / FPS;    // Si no se esta avanzando se va frenando.
                 ship.avance.y -= FRICCION * ship.avance.y / FPS;
             }
 
-            /* Dibujamos la nave triangular */
-            contx.strokeStyle = "white";    //Defino el color del borde de la nave
-            contx.lineWidth = SHIP_SIZE / 20;   //Ancho de la linea.
-            contx.beginPath();  //Resetea o comienza la linea que quiero trazar.
-            
-            /* Parte delantera de la nave. */
-            contx.moveTo(  //Mueve la linea hacia el punto que especificamos.
-                ship.x + 4 / 3  * ship.ratio * Math.cos(ship.angle), 
-                ship.y - 4 / 3  * ship.ratio * Math.sin(ship.angle)
-            );
-            
-            /*  Parte trasera izquierda de la nave. */
-            contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
-                ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) + Math.sin(ship.angle)),
-                ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) - Math.cos(ship.angle))
-            );
+            /* Si no esta explotando, dibujamos la nave triangular */
+            if(!exploding)
+            {
+                if(blinking)
+                {
+                    contx.strokeStyle = "white";    //Defino el color del borde de la nave
+                    contx.lineWidth = SHIP_SIZE / 20;   //Ancho de la linea.
+                    contx.beginPath();  //Resetea o comienza la linea que quiero trazar.
+                    
+                    /* Parte delantera de la nave. */
+                    contx.moveTo(  //Mueve la linea hacia el punto que especificamos.
+                        ship.x + 4 / 3  * ship.ratio * Math.cos(ship.angle), 
+                        ship.y - 4 / 3  * ship.ratio * Math.sin(ship.angle)
+                    );
+                    
+                    /*  Parte trasera izquierda de la nave. */
+                    contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
+                        ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) + Math.sin(ship.angle)),
+                        ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) - Math.cos(ship.angle))
+                    );
 
-            /* Parte trasera derecha de la nave. */
-            contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
-                ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) - Math.sin(ship.angle)),
-                ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) + Math.cos(ship.angle))
-            );
-            contx.closePath();    //Cerramos el triangulo.
-            contx.stroke(); //Dibuja el camino elegido.
+                    /* Parte trasera derecha de la nave. */
+                    contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
+                        ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) - Math.sin(ship.angle)),
+                        ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) + Math.cos(ship.angle))
+                    );
+                    contx.closePath();    //Cerramos el triangulo.
+                    contx.stroke(); //Dibuja el camino elegido.
+                }
+
+                /* Manejador del destello */
+                if(ship.blinkNumber > 0)
+                {
+                    //Reducimos el tiempo de destello.
+                    ship.blinkTime--;
+
+                    //Reducimos el numero de destellos
+                    if(ship.blinkTime == 0)
+                    {
+                        ship.blinkTime = Math.ceil(SHIP_BLINK_DURATION * FPS);
+                        ship.blinkNumber--;
+                        
+                    }
+                }
+            }else{  //Si esta explotando, dibujamos la explosion
+                contx.fillStyle = "darkerd";
+                contx.beginPath();
+                contx.arc(ship.x,ship.y,ship.ratio * 1.7 ,0, Math.PI * 2, false);
+                contx.fill();
+                contx.fillStyle = "red";
+                contx.beginPath();
+                contx.arc(ship.x,ship.y,ship.ratio * 1.4 ,0, Math.PI * 2, false);
+                contx.fill();
+                contx.fillStyle = "orange";
+                contx.beginPath();
+                contx.arc(ship.x,ship.y,ship.ratio * 1.1 ,0, Math.PI * 2, false);
+                contx.fill();
+                contx.fillStyle = "yellow";
+                contx.beginPath();
+                contx.arc(ship.x,ship.y,ship.ratio * 0.8 ,0, Math.PI * 2, false);
+                contx.fill();
+                contx.fillStyle = "white";
+                contx.beginPath();
+                contx.arc(ship.x,ship.y,ship.ratio * 0.5 ,0, Math.PI * 2, false);
+                contx.fill();
+
+            }
+
+            /* Region de colisiones nave */
+            if(MOSTRAR_COLISION){
+                contx.strokeStyle = "lime";
+                contx.beginPath();
+                contx.arc(ship.x,ship.y,ship.ratio,0, Math.PI * 2, false);
+                contx.stroke();
+            }
 
             /* Dibujamos los asteroides */
-            contx.strokeStyle = "grey";
-            contx.lineWidth = SHIP_SIZE / 20;
             var x,y,ratio,angle,vertixes, offset;
-            for(var i = 0; i < asteroids.length ; i++){
+            for(var i = 0; i < asteroids.length ; i++)
+            {
+                contx.strokeStyle = "grey";
+                contx.lineWidth = SHIP_SIZE / 20;
 
                 /* Tomamos las propiedades del asteroide */
                 x = asteroids[i].x;
@@ -221,15 +322,73 @@
                         y + ratio * offset[j] * Math.sin(angle + j * Math.PI * 2 / vertixes)
                     );
                 }
+                
                 contx.closePath();
                 contx.stroke();   
-                
 
-                /* Movemos el asteroide */
+                /* Region de colision del asteroide */
+                if(MOSTRAR_COLISION){   //Para mostrar o no mostrar la region (debugging)
+                    contx.strokeStyle = "lime";
+                    contx.beginPath();
+                    contx.arc(x,y,ratio,0, Math.PI * 2, false);  //Usa una curva dada para crear un circulo.
+                    contx.stroke();
+                }
+            }
+            
+            /* Chequeamos si ocurrieron colisiones con asteroide */
+
+            if(!exploding) //Si esta explotando, no se podra mover y quedara explotado.
+            {
+                if(ship.blinkNumber == 0)  //Solo se chequean colisiones cuando termina invulnerabilidad.
+                {
+                    for(var i = 0; i < asteroids.length ; i++)
+                    {
+                        //Si la distancia entre ambos circulos es menor a la suma de ambos radios es porque se entro en el circulo.
+                        if(distBetweenPoints(ship.x, ship.y, asteroids[i].x, asteroids[i].y) < ship.ratio + asteroids[i].ratio)
+                        {
+                            explodeShip();
+                        }
+                    }
+                }
+
+                /* Rotamos la nave */
+                ship.angle += ship.rota;
+
+                /* Movemos la nave */   
+                ship.x += ship.avance.x;    //A pesar que soltemos la tecla, quedara moviendose en esa direccion.
+                ship.y += ship.avance.y;
+
+            }else{ //Cuando si esta explotando
+              ship.explodeTime --;  //Reducimos el tiempo de la explosion
+              
+              if(ship.explodeTime == 0){ //Cuando termina la explosion creamos otra nueva nave.
+                ship = newShip();
+              }  
+            }
+        
+            /* Manejar los margenes de pantalla de la nave */
+            
+            if(ship.x < 0 - ship.ratio){    //Si nos salimos por la izquierda del margen horizontal.
+                ship.x = canv.width + ship.ratio;   //Lo mandamos a la derceha.
+            }else if (ship.x > canv.width + ship.ratio){    //Si nos salimos por la derecha del margen horizontal.
+                ship.x = 0 - ship.ratio //Lo mandamos por la izquierda.
+            }
+
+            if(ship.y < 0 - ship.ratio){    //Si nos salimos por arriba del margen vertical. Esta invertido!
+                ship.y = canv.height + ship.ratio;  //Lo mandamos por abajo.
+            }else if (ship.y > canv.height + ship.ratio){   //Si nos salimos por abajo del margen vertical.
+                ship.y = 0 - ship.ratio //Lo mandamos por arriba.
+            }
+
+
+             /* Movemos el asteroide */
+            for(var i = 0; i < asteroids.length; i++){
+                
                 asteroids[i].x += asteroids[i].xVelocity;
                 asteroids[i].y += asteroids[i].yVelocity;
 
-                /* Manejamos margenes de pantalla del asteroide */
+            /* Manejamos margenes de pantalla del asteroide */
+            
                 if(asteroids[i].x < 0 -asteroids[i].ratio){
                     asteroids[i].x = canv.width + asteroids[i].ratio;
                 }else if(asteroids[i].x > canv.width + asteroids[i].ratio){
@@ -241,33 +400,14 @@
                 }else if(asteroids[i].y > canv.height + asteroids[i].ratio){
                     asteroids[i].y = 0 - asteroids[i].ratio
                 }
-
-            }
-            
-            /* Rotamos la nave */
-            ship.angle += ship.rota;
-
-            /* Movemos la nave */   
-            ship.x += ship.avance.x;    //A pesar que soltemos la tecla, quedara moviendose en esa direccion.
-            ship.y += ship.avance.y;
-
-            /* Manejar los margenes */
-            
-            if(ship.x < 0 - ship.ratio){    //Si nos salimos por la izquierda del margen horizontal.
-                ship.x = canv.width + ship.ratio;   //Lo mandamos a la derceha.
-            }else if (ship.x > canv.width + ship.ratio){    //Si nos salimos por la derecha del margen horizontal.
-                ship.x = 0 - ship.ratio //Lo mandamos por la izquierda.
             }
 
 
-            if(ship.y < 0 - ship.ratio){    //Si nos salimos por arriba del margen vertical. Esta invertido!
-                ship.y = canv.height + ship.ratio;  //Lo mandamos por abajo.
-            }else if (ship.y > canv.height + ship.ratio){   //Si nos salimos por abajo del margen vertical.
-                ship.y = 0 - ship.ratio //Lo mandamos por arriba.
-            }
             /*  Punto del centro */
-           contx.fillStyle = "red"; //Seteo color
-           //contx.fillRect(ship.x -1, ship.y -1, 2, 2) //Dibujo el patron.
+            if(MOSTRAR_PUNTO){   //Para debuggear, directamente con la constante.{
+                contx.fillStyle = "red"; //Seteo color
+                contx.fillRect(ship.x -1, ship.y -1, 2, 2) //Dibujo el patron.
+                } 
         }
     </script>
 </body>

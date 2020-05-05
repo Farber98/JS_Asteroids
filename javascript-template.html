@@ -20,7 +20,7 @@
         const ASTEROIDS_VERT = 10;  //Numero promedio de vertices en cada asteroide.
         const ASTEROIDS_SIZE = 100; // Tamaño inicial de mis asteroides.
         const ASTEROIDS_SPEED = 50; //Maxima velocidad inicial de un asteroide en pixeles por segundo.
-        const ASTEROIDS_NUM = 10;
+        const ASTEROIDS_NUM = 1;
         const ASTEROIDS_JAG = 0.4;  // Irregularidad de un asteroide.  ( 0 = none, 1 = lots.)
         const FPS = 30; //Frames por segundo.
         const SHIP_SIZE = 30;  // Ship height in pixels.
@@ -29,6 +29,9 @@
         const FRICCION = 0.7;   //Coeficiente de friccion del espacio (0 = no hay friccion, 1 = mucha friccion).
         const MOSTRAR_PUNTO = false;    //Mostramos o escondemos el punto del centro
         const MOSTRAR_COLISION = false; //Mostramos o escondemos una colision
+        const TEXT_FADE_TIME  = 2.5;  //Text fade time in seconds
+        const TEXT_SIZE = 40;  // Altura de la fuente en PX.
+        const VIDAS = 3;  // Numero de vidas.
 
 /***************************** CONSTANTES DE CONFIGURACION  ***************************************/
 
@@ -36,28 +39,10 @@
         var canv = document.getElementById("gameCanvas"); //Referencia al objeto con ID "GameCanvas"
         var contx = canv.getContext("2d"); //Objeto usado para dibujar en el canvas.
 
-        /* Defino la nave como un objeto JSON. */
-        var ship = {
-            x: canv.width /2,
-            y: canv.height /2,
-            ratio: SHIP_SIZE / 2,
-            angle: (90 / 180 * Math.PI), //Como las funciones matematicas funcionan en radianes tenemos que dividir en 180 y multiplicar por PI
-            rota: 0,
-            avanzando: false,
-            avance: {   //Nos permite que se continue avanzando en dicha direccion cuando soltemos la letra.
-                x:0,
-                y:0
-            },
-            explodeTime: 0,  //Cuando explode time es 0, esta explotando.
-        }
 
-
-        /* Para crear una nueva nave cuando explota. */
-        var ship = newShip();
-
-        /* Defino los asteroides */
-        var asteroids = [];
-        createAsteroidsBelt();
+        /*Configuramos parametros del juego*/
+        var vidas,nivel,asteroids,ship, texto, textoAlfa;
+        newGame(); 
 
         /* Manejadores de eventos. */
         document.addEventListener("keydown",keyDown);
@@ -68,8 +53,9 @@
 
 
         function createAsteroidsBelt(){
+            asteroids = [];
             var x,y;
-            for (var i = 0; i < ASTEROIDS_NUM; i++){
+            for (var i = 0; i < ASTEROIDS_NUM + nivel; i++){ // + nivel + asteroides.
                 do{
                     x = Math.floor(Math.random() * canv.width); //Posicion aleatoria de un asteroide en x
                     y = Math.floor(Math.random() * canv.height); //Posicion aleatoria de un asteroide en x
@@ -99,11 +85,44 @@
 
             //Destruimos el asteroide
             asteroids.splice(index,1);
+
+            //Nuevo nivel cuando no hay mas asteroides
+            if(asteroids.length == 0)
+            {
+                nivel++;
+                newLevel();
+            }
         }
 
         function distBetweenPoints(x1, y1 , x2 , y2)
         {   //
             return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        }
+
+        function drawShip(x, y, angle, color = "white"){ //Por defecto si no le paso
+            contx.strokeStyle = color;    //Defino el color del borde de la nave
+            contx.lineWidth = SHIP_SIZE / 20;   //Ancho de la linea.
+            contx.beginPath();  //Resetea o comienza la linea que quiero trazar.
+            
+            /* Parte delantera de la nave. */
+            contx.moveTo(  //Mueve la linea hacia el punto que especificamos.
+                x + 4 / 3  * ship.ratio * Math.cos(angle), 
+                y - 4 / 3  * ship.ratio * Math.sin(angle)
+            );
+            
+            /*  Parte trasera izquierda de la nave. */
+            contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
+                x - ship.ratio * (2 / 3 * Math.cos(angle) + Math.sin(angle)),
+                y + ship.ratio * (2 / 3 * Math.sin(angle) - Math.cos(angle))
+            );
+
+            /* Parte trasera derecha de la nave. */
+            contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
+                x - ship.ratio * (2 / 3 * Math.cos(angle) - Math.sin(angle)),
+                y + ship.ratio * (2 / 3 * Math.sin(angle) + Math.cos(angle))
+            );
+            contx.closePath();    //Cerramos el triangulo.
+            contx.stroke(); //Dibuja el camino elegido.
         }
 
         //Si se colisiona, se pinta todo.
@@ -118,7 +137,20 @@
             contx.stroke();
         }
 
+        /* Creamos el Game Over */
+        function gameOver(){
+            ship.dead = true;
+            texto = "Game Over";
+            textoAlfa = 1.0;
+        }
+
         function keyDown(/** @type {KeyboardEvent} */ evt){
+
+            if(ship.dead) //Cuando se pierde ya no se puede mover
+            {
+                return;
+            }
+
             switch(evt.keyCode){
                 case 32:  // Disparo laser con barra espaciadora
                     ship.puedeDisparar = true;
@@ -141,6 +173,12 @@
         }
 
         function keyUp(/** @type {KeyboardEvent} */ evt){
+            
+            if(ship.dead) //Cuando se pierde ya no se puede mover
+            {
+                return;
+            }
+
             switch(evt.keyCode){
 
                 case 37:  // Termina rotacion izquierda
@@ -158,12 +196,13 @@
         }
 
         function newAsteroid(x,y, ratio){
+            var nivelMult = 1 + 0.1 * nivel;  //El nivel afecta al dificultad, aumenta la velocidad.
             var asteroid = {    //Lo que necesitamos saber de cada asteroide.
                 x: x,   //Posicion en ex
                 y: y,   //Posicion en y
                 //Velocidad en x e y aleatoria                          //Aleatoriamente se mueve hacia delante o atras.
-                xVelocity: Math.random() * ASTEROIDS_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1),
-                yVelocity: Math.random() * ASTEROIDS_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1),
+                xVelocity: Math.random() * ASTEROIDS_SPEED * nivelMult / FPS * (Math.random() < 0.5 ? 1 : -1),
+                yVelocity: Math.random() * ASTEROIDS_SPEED * nivelMult / FPS * (Math.random() < 0.5 ? 1 : -1),
                 ratio: ratio,   //Radio de cada asteroide.
                 angle: Math.random() * Math.PI * 2, //Angulo aleatorio en radianes.
                 //Numero aleatorio entre 5 y 15.
@@ -177,6 +216,23 @@
             return asteroid;
         }
 
+        function newGame(){
+        /* Para crear una nueva nave cuando explota. */
+            vidas = VIDAS;
+            nivel = 0;
+            ship = newShip();
+            newLevel();
+            
+        }
+
+        function newLevel(){
+            /* Defino los asteroides */
+            texto = "Nivel " + (nivel + 1);
+            textoAlfa = 1.0;  //Opaco en 1.
+            createAsteroidsBelt();
+        }
+
+
         function newShip()  //Volvemos a setear las propiedades para crear otra nave.
         {
             return ship = 
@@ -189,6 +245,7 @@
                 blinkNumber: Math.ceil(SHIP_INVULNERABILITY_DURATION / SHIP_BLINK_DURATION),    //Cantidad de destellos
                 blinkTime: Math.ceil(SHIP_BLINK_DURATION * FPS),  //Duracion de los destellos.
                 avanzando: false,
+                dead: false,
                 avance: {   //Nos permite que se continue avanzando en dicha direccion cuando soltemos la letra.
                     x:0,
                     y:0
@@ -229,7 +286,7 @@
             contx.fillRect(0,0,canv.width,canv.height); // Dimensones del rectangulo.
 
             /* Avanzamos la nave */
-            if(ship.avanzando)  //Mientras mantengamos la tecla de avanzar, la nave se acelera cada vez mas.
+            if(ship.avanzando && !ship.dead)  //Mientras mantengamos la tecla de avanzar, la nave se acelera cada vez mas.
             { 
                 ship.avance.x += SHIP_AVANCE * Math.cos(ship.angle) / FPS;  //Componente avance en x.
                 ship.avance.y -= SHIP_AVANCE * Math.sin(ship.angle) / FPS;   //Componente avance en y.
@@ -272,31 +329,9 @@
             /* Si no esta explotando, dibujamos la nave triangular */
             if(!exploding)
             {
-                if(blinking)
+                if(blinking && !ship.dead)
                 {
-                    contx.strokeStyle = "white";    //Defino el color del borde de la nave
-                    contx.lineWidth = SHIP_SIZE / 20;   //Ancho de la linea.
-                    contx.beginPath();  //Resetea o comienza la linea que quiero trazar.
-                    
-                    /* Parte delantera de la nave. */
-                    contx.moveTo(  //Mueve la linea hacia el punto que especificamos.
-                        ship.x + 4 / 3  * ship.ratio * Math.cos(ship.angle), 
-                        ship.y - 4 / 3  * ship.ratio * Math.sin(ship.angle)
-                    );
-                    
-                    /*  Parte trasera izquierda de la nave. */
-                    contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
-                        ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) + Math.sin(ship.angle)),
-                        ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) - Math.cos(ship.angle))
-                    );
-
-                    /* Parte trasera derecha de la nave. */
-                    contx.lineTo(  // 	Agrega una nueva linea hacia el punto desde el ultimo punto especificado.
-                        ship.x - ship.ratio * (2 / 3 * Math.cos(ship.angle) - Math.sin(ship.angle)),
-                        ship.y + ship.ratio * (2 / 3 * Math.sin(ship.angle) + Math.cos(ship.angle))
-                    );
-                    contx.closePath();    //Cerramos el triangulo.
-                    contx.stroke(); //Dibuja el camino elegido.
+                    drawShip(ship.x, ship.y, ship.angle);
                 }
 
                 /* Manejador del destello */
@@ -370,6 +405,27 @@
                     contx.arc(ship.lasers[i].x, ship.lasers[i].y , ship.ratio * 0.25, 0, Math.PI * 2, false);
                     contx.fill();
                 }
+            }
+
+            /* Dibujamos el texto */
+            if(textoAlfa >= 0){
+                contx.textAlign = "center";
+                contx.textBaseline = "middle";
+                contx.fillStyle = "rgba(255,255,255, " + textoAlfa + " )";
+                contx.font = "small-caps " + TEXT_SIZE + "px dejavu sans mono";
+                contx.fillText(texto,canv.width / 2, canv.height * 0.75); //Ubicacion
+                textoAlfa -= (1.0 / TEXT_FADE_TIME / FPS); //Para que se vaya desvaneciendo
+            }else if (ship.dead){
+                newGame(); //Restartea el juego
+            }
+
+            /* Dibujamos las vidas */
+            var colorVida;
+            for(var i = 0; i < vidas; i++)
+            {
+                //Se pone en rojo antes de eliminarse.
+                colorVida = exploding && i == vidas -1 ? "red" : "white";
+                drawShip(SHIP_SIZE + i * SHIP_SIZE * 1.2, SHIP_SIZE, 0.5 * Math.PI, colorVida);
             }
 
             /* Detectamos que un laser golpea un asteroide */
@@ -447,7 +503,7 @@
 
             if(!exploding) //Si esta explotando, no se podra mover y quedara explotado.
             {
-                if(ship.blinkNumber == 0)  //Solo se chequean colisiones cuando termina invulnerabilidad.
+                if(ship.blinkNumber == 0 && !ship.dead)  //Solo se chequean colisiones cuando termina invulnerabilidad.
                 {
                     for(var i = 0; i < asteroids.length ; i++)
                     {
@@ -471,8 +527,16 @@
             }else{ //Cuando si esta explotando
               ship.explodeTime --;  //Reducimos el tiempo de la explosion
               
-              if(ship.explodeTime == 0){ //Cuando termina la explosion creamos otra nueva nave.
-                ship = newShip();
+              if(ship.explodeTime == 0) //Cuando termina la explosion creamos otra nueva nave.
+              {
+                vidas--;
+                if(vidas == 0)
+                {
+                    gameOver();
+                }else{
+                    ship = newShip();
+                }
+                
               }  
             }
         

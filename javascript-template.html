@@ -38,7 +38,8 @@
         const SAVE_KEY_SCORE = "puntajeMax"; // Clave para el local storage.
         const SOUND_ON = true; //Flag para el manejo del sonido.
         const MUSIC_ON = true;
-
+        var PUNTAJE_MAX = 0;
+        
 /***************************** CONSTANTES DE CONFIGURACION  ***************************************/
 
         /** @type {HTMLCanvasElement} */
@@ -108,6 +109,7 @@
             if( puntaje > puntajeMax){
                 puntajeMax = puntaje;
                 localStorage.setItem(SAVE_KEY_SCORE, puntajeMax) //Para guardar el puntaje Max
+                PUNTAJE_MAX = PUNTAJE_MAX + 1;
             }
 
             //Destruimos el asteroide
@@ -175,7 +177,7 @@
         /* Creamos el Game Over */
         function gameOver(){
             ship.dead = true;
-            texto = "Game Over";
+            texto = 'Game Over';
             textoAlfa = 1.0;
         }
 
@@ -254,7 +256,7 @@
         function newGame(){
         /* Para crear una nueva nave cuando explota. */
             puntaje = 0;
-            
+            PUNTAJE_MAX = 0;
             vidas = VIDAS;
             nivel = 0;
             ship = newShip();
@@ -549,10 +551,10 @@
 
             /* Dibujamos el puntaje MAXIMO */
             contx.textAlign = "center";
-            contx.textBaseline = "middle";
-            contx.fillStyle = "white";
+            contx.textBaseline = "middle"
+            contx.fillStyle = "green";
             contx.font = (TEXT_SIZE * 0.75 )+ "px dejavu sans mono";
-            contx.fillText("TOP: " + puntajeMax,canv.width/2, SHIP_SIZE); //Ubicacion
+            contx.fillText( puntajeMax,canv.width/2, SHIP_SIZE); //Ubicacion
 
             /* Detectamos que un laser golpea un asteroide */
             var asteroidX, asteroidY, asteroidRatio, laserX, laserY

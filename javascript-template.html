@@ -36,6 +36,8 @@
         const ASTEROIDS_PTS_MDM = 50; //Puntos por un asteroide medio.
         const ASTEROIDS_PTS_SML = 100; //Puntos por un asteroide chico.
         const SAVE_KEY_SCORE = "puntajeMax"; // Clave para el local storage.
+        const SOUND_ON = true; //Flag para el manejo del sonido.
+        const MUSIC_ON = true;
 
 /***************************** CONSTANTES DE CONFIGURACION  ***************************************/
 
@@ -43,6 +45,15 @@
         var canv = document.getElementById("gameCanvas"); //Referencia al objeto con ID "GameCanvas"
         var contx = canv.getContext("2d"); //Objeto usado para dibujar en el canvas.
 
+        /* Seteamos los efectos de sonido */
+        var fxExplosion = new Sonido("sounds/explode.m4a",1,0.1); //Importamos sonidos
+        var fxLaser = new Sonido("sounds/laser.m4a",5,0.1); 
+        var fxLaserPega = new Sonido("sounds/hit.m4a", 5, 0.1);
+        var fxAvance = new Sonido("sounds/thrust.m4a",1,0.1);
+
+        /* Seteamos la musica */
+        var musica = new Musica("sounds/music-low.m4a", "sounds/music-high.m4a");
+        var roidsRestantes, roidsTotales; //Guia para velocidad de la musica.
 
         /*Configuramos parametros del juego*/
         var vidas,nivel,asteroids,ship, texto, textoAlfa, puntaje, puntajeMax;
@@ -58,6 +69,8 @@
 
         function createAsteroidsBelt(){
             asteroids = [];
+            roidsTotales = (ASTEROIDS_NUM + nivel) * 7;  //Para la musica. 7 veces se parte un asteroide y el nivel aumenta asteroides
+            roidsRestantes = roidsTotales; 
             var x,y;
             for (var i = 0; i < ASTEROIDS_NUM + nivel; i++){ // + nivel + asteroides.
                 do{
@@ -99,6 +112,13 @@
 
             //Destruimos el asteroide
             asteroids.splice(index,1);
+            fxLaserPega.play();
+
+            //Calculamos el radio de asteroides restantes para determinar el tempo de la musica.
+            roidsRestantes--; 
+            //Si no queda ninguno ratio = 1, sino encontramos el ratio.
+            musica.setAsteroidRatio(roidsRestantes == 0 ? 1 : roidsRestantes/roidsTotales);
+
 
             //Nuevo nivel cuando no hay mas asteroides
             if(asteroids.length == 0)
@@ -142,6 +162,7 @@
         //Si se colisiona, se pinta todo.
         function explodeShip(){
             ship.explodeTime = Math.ceil(SHIP_EXPLO_DURATION * FPS);
+            fxExplosion.play();
             
             contx.fillStyle = "lime";   //Se colorea por dentro.
             contx.strokeStyle = "lime";
@@ -293,9 +314,71 @@
                     tiempoExplosion: 0,
 
                 })
+                fxLaser.play();
             }
             //Dejo de disparar
             ship.puedeDisparar = false;
+        }
+
+        function Musica(srclow, srchigh)
+        {
+            this.sonidoBajo = new Audio(srclow);
+            this.sonidoAlto = new Audio(srchigh);
+            this.bajo = true; //Para ir alternando los sonidos, un flag.
+            this.tempo = 1.0; // BPS
+            this.tiempoBeat = 0; //Frames dejados hasta el proximo beat. Deberia ir progresivamente aumentando
+
+            this.play = function(){
+                if(MUSIC_ON)
+                {
+                    if (this.low){ //Se reproduce el bajo
+                        this.sonidoBajo.play();
+                    }else
+                    { //Se reproduce el alto
+                        this.sonidoAlto.play();
+                    }
+                    this.low = !this.low; //Asi lo vamos alternando
+                }
+            }
+
+            this.tick = function(){ //Contamos los tiempos. La llamamos por c/frame.
+                if(this.tiempoBeat == 0){ //Cuando llega a 0 le damos play
+                    this.play();
+                    this.tiempoBeat = Math.ceil(this.tempo * FPS); // 1 segundo hasta que se reproduce el siguiente.
+                }else{
+                    this.tiempoBeat--;
+                }
+            }
+
+            this.setAsteroidRatio = function(ratio){
+                this.tempo = 1.0 - 0.75 * (1.0 - ratio);
+            }
+        }
+
+        /* Creamos nuestro objeto sound para reproducir los sonidos correctamente */
+        function Sonido(fuente, maxSonidos = 1, vol = 1.0 )
+        {
+            this.sonido = 0;   //Sonidos actuales.
+            this.sonidos = [];  //Array de sonidos.
+            for(var i = 0; i< maxSonidos; i++)
+            {
+                this.sonidos.push(new Audio(fuente)); //Metemos el sonido al array.
+                this.sonidos[i].volume = vol  //Seteamos su volumen
+            }
+
+            this.play = function(){ //Simulamos una pila donde va reproduciendo y sacando
+                if(SOUND_ON)
+                {
+                    this.sonido = (this.sonido + 1 ) % maxSonidos;
+                    this.sonidos[this.sonido].play();
+                }
+            }
+
+            this.stop = function(){ //Funcion para parar los sonidos.
+                this.sonidos[this.sonido].pause(); 
+                this.sonidos[this.sonido].currentTime = 0; //Reseteamos
+
+            }
         }
 
         function update()
@@ -303,6 +386,10 @@
             var blinking = ship.blinkNumber % 2 == 0; //Cuando es para destella, cuando es impar no. De tal manera reduciendo de a 1 se da ese efecto.
 
             var exploding = ship.explodeTime > 0; //Significa que esta explotando
+
+            /* Tickeamos la musica */
+            musica.tick();
+
 
             /* Dibujamos el espacio */
             contx.fillStyle = "black"; //Seteo color usado para llenar el dibujo
@@ -313,6 +400,7 @@
             { 
                 ship.avance.x += SHIP_AVANCE * Math.cos(ship.angle) / FPS;  //Componente avance en x.
                 ship.avance.y -= SHIP_AVANCE * Math.sin(ship.angle) / FPS;   //Componente avance en y.
+                fxAvance.play();
 
                 /* Dibujamos efectos mientras estamos acelerando */
                 if(!exploding && blinking)
@@ -344,9 +432,10 @@
                     contx.fill();
                     contx.stroke(); //Dibuja el camino elegido.
                 }
-            }else{
-                ship.avance.x -= FRICCION * ship.avance.x / FPS;    // Si no se esta avanzando se va frenando.
+            }else{    // Si no se esta avanzando se va frenando.
+                ship.avance.x -= FRICCION * ship.avance.x / FPS;
                 ship.avance.y -= FRICCION * ship.avance.y / FPS;
+                fxAvance.stop(); //Se descarta sonido si no apreto
             }
 
             /* Si no esta explotando, dibujamos la nave triangular */
